@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
 import { sendGmail } from "@/lib/gmail";
 import { sendOutlook } from "@/lib/outlook";
-import { loadTokens } from "@/lib/tokens";
+import { getEmailTokens } from "@/lib/tokens";
 
 interface EmailToSend {
   to: string;
@@ -10,6 +12,11 @@ interface EmailToSend {
 }
 
 export async function POST(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const { emails, provider } = await request.json() as {
     emails: EmailToSend[];
     provider: "gmail" | "outlook";
@@ -19,7 +26,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "No emails provided" }, { status: 400 });
   }
 
-  const tokens = loadTokens();
+  const tokens = await getEmailTokens(session.user.id);
   const results: { to: string; status: "sent" | "failed"; error?: string }[] = [];
 
   for (const email of emails) {

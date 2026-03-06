@@ -43,3 +43,7 @@ next-env.d.ts
 # EmailAI sensitive data — NEVER commit these
 /data/tokens.json
 /data/style-profile.json
+
+# Database
+/prisma/dev.db
+/prisma/*.db-journal

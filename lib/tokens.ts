@@ -1,51 +1,47 @@
-import fs from "fs";
-import path from "path";
+import { prisma } from "@/lib/db";
 
-const TOKENS_PATH = path.join(process.cwd(), "data", "tokens.json");
+export async function getEmailTokens(userId: string) {
+  const tokens = await prisma.emailToken.findMany({ where: { userId } });
 
-export interface TokenStore {
-  gmail?: {
-    access_token: string;
-    refresh_token: string;
-    expiry_date: number;
-    email?: string;
-  };
-  outlook?: {
-    access_token: string;
-    refresh_token?: string;
-    expires_at: number;
-    email?: string;
-  };
-}
+  const result: {
+    gmail?: { access_token: string; refresh_token: string; expiry_date: number; email?: string };
+    outlook?: { access_token: string; refresh_token?: string; expires_at: number; email?: string };
+  } = {};
 
-function ensureDataDir() {
-  const dir = path.dirname(TOKENS_PATH);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+  for (const t of tokens) {
+    if (t.provider === "gmail") {
+      result.gmail = {
+        access_token: t.accessToken,
+        refresh_token: t.refreshToken ?? "",
+        expiry_date: Number(t.expiresAt),
+        email: t.email ?? undefined,
+      };
+    } else if (t.provider === "outlook") {
+      result.outlook = {
+        access_token: t.accessToken,
+        refresh_token: t.refreshToken ?? undefined,
+        expires_at: Number(t.expiresAt),
+        email: t.email ?? undefined,
+      };
+    }
   }
+
+  return result;
 }
 
-export function loadTokens(): TokenStore {
-  ensureDataDir();
-  if (!fs.existsSync(TOKENS_PATH)) return {};
-  return JSON.parse(fs.readFileSync(TOKENS_PATH, "utf-8"));
-}
-
-export function saveTokens(tokens: TokenStore) {
-  ensureDataDir();
-  fs.writeFileSync(TOKENS_PATH, JSON.stringify(tokens, null, 2));
-}
-
-export function updateGmailTokens(
-  tokens: TokenStore["gmail"]
+export async function upsertEmailToken(
+  userId: string,
+  provider: "gmail" | "outlook",
+  data: {
+    accessToken: string;
+    refreshToken?: string | null;
+    expiresAt: bigint;
+    email?: string | null;
+  }
 ) {
-  const store = loadTokens();
-  store.gmail = tokens;
-  saveTokens(store);
-}
-
-export function updateOutlookTokens(tokens: TokenStore["outlook"]) {
-  const store = loadTokens();
-  store.outlook = tokens;
-  saveTokens(store);
+  return prisma.emailToken.upsert({
+    where: { userId_provider: { userId, provider } },
+    create: { userId, provider, ...data },
+    update: data,
+  });
 }

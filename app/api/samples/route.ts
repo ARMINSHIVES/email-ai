@@ -1,13 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
 import { extractText } from "@/lib/parseFile";
-import { addSample, deleteSample, loadProfile } from "@/lib/styleProfile";
+import { addSample, deleteSample, getSamples } from "@/lib/styleProfile";
 
 export async function GET() {
-  const profile = loadProfile();
-  return NextResponse.json({ samples: profile.samples });
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const samples = await getSamples(session.user.id);
+  return NextResponse.json({ samples });
 }
 
 export async function POST(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const formData = await request.formData();
   const file = formData.get("file") as File | null;
 
@@ -22,15 +33,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Could not extract text from file" }, { status: 400 });
   }
 
-  const sample = addSample(file.name, text);
+  const sample = await addSample(session.user.id, file.name, text);
   return NextResponse.json({ sample });
 }
 
 export async function DELETE(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const { id } = await request.json();
   if (!id) {
     return NextResponse.json({ error: "No id provided" }, { status: 400 });
   }
-  deleteSample(id);
+  await deleteSample(session.user.id, id);
   return NextResponse.json({ success: true });
 }

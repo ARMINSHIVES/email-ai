@@ -1,59 +1,29 @@
-import fs from "fs";
-import path from "path";
+import { prisma } from "@/lib/db";
 
-const DATA_DIR = path.join(process.cwd(), "data");
-const PROFILE_PATH = path.join(DATA_DIR, "style-profile.json");
-
-export interface WritingSample {
-  id: string;
-  name: string;
-  text: string;
-  addedAt: string;
+export async function getSamples(userId: string) {
+  return prisma.styleSample.findMany({
+    where: { userId },
+    orderBy: { addedAt: "asc" },
+  });
 }
 
-export interface StyleProfile {
-  samples: WritingSample[];
+export async function addSample(userId: string, name: string, text: string) {
+  return prisma.styleSample.create({
+    data: { userId, name, text },
+  });
 }
 
-function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
+export async function deleteSample(userId: string, id: string) {
+  await prisma.styleSample.deleteMany({
+    where: { id, userId },
+  });
 }
 
-export function loadProfile(): StyleProfile {
-  ensureDataDir();
-  if (!fs.existsSync(PROFILE_PATH)) {
-    return { samples: [] };
-  }
-  return JSON.parse(fs.readFileSync(PROFILE_PATH, "utf-8"));
-}
-
-export function saveProfile(profile: StyleProfile) {
-  ensureDataDir();
-  fs.writeFileSync(PROFILE_PATH, JSON.stringify(profile, null, 2));
-}
-
-export function addSample(name: string, text: string): WritingSample {
-  const profile = loadProfile();
-  const sample: WritingSample = {
-    id: Date.now().toString(),
-    name,
-    text,
-    addedAt: new Date().toISOString(),
-  };
-  profile.samples.push(sample);
-  saveProfile(profile);
-  return sample;
-}
-
-export function deleteSample(id: string) {
-  const profile = loadProfile();
-  profile.samples = profile.samples.filter((s) => s.id !== id);
-  saveProfile(profile);
-}
-
-export function getSamplesText(): string {
-  const profile = loadProfile();
-  return profile.samples.map((s) => s.text).join("\n\n---\n\n");
+export async function getSamplesText(userId: string): Promise<string> {
+  const samples = await prisma.styleSample.findMany({
+    where: { userId },
+    select: { text: true },
+    orderBy: { addedAt: "asc" },
+  });
+  return samples.map((s) => s.text).join("\n\n---\n\n");
 }
